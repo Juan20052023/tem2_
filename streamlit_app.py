@@ -1,151 +1,172 @@
 import streamlit as st
 import pandas as pd
-import math
 from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
+# -----------------------------------------------------------------------------
+# CONFIG
+
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title='Dashboard CENACE',
+    page_icon='⚡',
+    layout="wide"
 )
 
 # -----------------------------------------------------------------------------
-# Declare some useful functions.
+# CARGA DE DATOS
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+@st.cache_data(ttl=1)
+def load_data():
+    DATA_FILENAME = Path(__file__).parent / "reporte_simec_historico_20260419.csv"
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+    df = pd.read_csv(DATA_FILENAME, encoding='latin1', engine='python')
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+    df.columns = df.columns.str.strip()
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+    df.columns = [
+        col.replace("Ã³", "ó")
+           .replace("Ã¡", "á")
+           .replace("Ã©", "é")
+           .replace("Ã±", "ñ")
+        for col in df.columns
+    ]
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
+    TIME_COLUMN = "Fecha"
+    df[TIME_COLUMN] = pd.to_datetime(df[TIME_COLUMN], errors='coerce')
+    df = df.dropna(subset=[TIME_COLUMN])
+    df[TIME_COLUMN] = df[TIME_COLUMN].dt.to_pydatetime()
+
+    numeric_cols = [col for col in df.columns if col not in ["Fecha", "Concepto"]]
+
+    for col in numeric_cols:
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.replace(",", "", regex=False)
+            .str.replace('"', '', regex=False)
+        )
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    df["Concepto"] = (
+        df["Concepto"]
+        .str.replace("Ã³", "ó")
+        .str.replace("Ã¡", "á")
+        .str.replace("Ã©", "é")
+        .str.replace("Ã±", "ñ")
     )
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    df = df.sort_values(TIME_COLUMN)
 
-    return gdp_df
-
-gdp_df = get_gdp_data()
+    return df, TIME_COLUMN
 
 # -----------------------------------------------------------------------------
-# Draw the actual page
+# LOAD
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+df, TIME_COLUMN = load_data()
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+# -----------------------------------------------------------------------------
+# UI
 
-# Add some spacing
-''
-''
+st.title("⚡ Dashboard Operación del Sistema Eléctrico")
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+# -----------------------------------------------------------------------------
+# FILTROS
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+st.sidebar.header("Filtros")
 
-countries = gdp_df['Country Code'].unique()
+min_date = df[TIME_COLUMN].min()
+max_date = df[TIME_COLUMN].max()
 
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
+date_range = st.sidebar.slider(
+    "Rango de fechas",
+    min_value=min_date,
+    max_value=max_date,
+    value=(min_date, max_date)
 )
 
-''
-''
+# -----------------------------------------------------------------------------
+# FILTRADO BASE
 
+df_filtered = df[
+    (df[TIME_COLUMN] >= date_range[0]) &
+    (df[TIME_COLUMN] <= date_range[1])
+]
 
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
+# -----------------------------------------------------------------------------
+# 🔥 BALANCE ENERGÉTICO
 
-st.header(f'GDP in {to_year}', divider='gray')
+def get_series(nombre):
+    return df_filtered[df_filtered["Concepto"] == nombre][["Fecha", "Energia_Dia_kWh"]].rename(
+        columns={"Energia_Dia_kWh": nombre}
+    )
 
-''
+gen = get_series("Total Generación")
+imp = get_series("Total Importación")
+exp = get_series("Total Exportación")
+dem = get_series("Demanda Distribución")
+perd = get_series("Total Pérdidas Transporte")
 
-cols = st.columns(4)
+# Merge todo por fecha
+balance_df = gen.merge(imp, on="Fecha", how="left") \
+                .merge(exp, on="Fecha", how="left") \
+                .merge(dem, on="Fecha", how="left") \
+                .merge(perd, on="Fecha", how="left")
 
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
+# Llenar NaN
+balance_df = balance_df.fillna(0)
 
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
+# 🔥 CALCULOS
+balance_df["Oferta"] = balance_df["Total Generación"] + balance_df["Total Importación"]
+balance_df["Demanda"] = balance_df["Demanda Distribución"]
+balance_df["Balance"] = balance_df["Oferta"] - balance_df["Demanda"]
 
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+# -----------------------------------------------------------------------------
+# 📊 KPIs
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+st.header("📊 Estado del Sistema")
+
+latest = balance_df.iloc[-1]
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("⚡ Generación", f"{latest['Total Generación']:,.0f}")
+col2.metric("📥 Importación", f"{latest['Total Importación']:,.0f}")
+col3.metric("📊 Demanda", f"{latest['Demanda']:,.0f}")
+
+balance_val = latest["Balance"]
+color = "normal" if balance_val >= 0 else "inverse"
+
+col4.metric(
+    "⚖️ Balance",
+    f"{balance_val:,.0f}",
+    delta="Superávit" if balance_val >= 0 else "Déficit",
+    delta_color=color
+)
+
+# -----------------------------------------------------------------------------
+# 📈 OFERTA VS DEMANDA
+
+st.header("📈 Oferta vs Demanda")
+
+st.line_chart(
+    balance_df,
+    x="Fecha",
+    y=["Oferta", "Demanda"]
+)
+
+# -----------------------------------------------------------------------------
+# 📉 PÉRDIDAS
+
+st.header("📉 Pérdidas del sistema")
+
+st.line_chart(
+    balance_df,
+    x="Fecha",
+    y="Total Pérdidas Transporte"
+)
+
+# -----------------------------------------------------------------------------
+# 📋 TABLA
+
+st.header("📋 Balance detallado")
+
+st.dataframe(balance_df, use_container_width=True)

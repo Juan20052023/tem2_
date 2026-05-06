@@ -52,7 +52,7 @@ def extraer_datos_rango(fecha_inicio, fecha_fin):
                         registro = {
                             "Fecha": fecha_texto,
                             "Concepto": datos_fila[0],
-                            "Energia_Dia_kWh": datos_fila[1], # Se mantiene el nombre interno pero se etiqueta como MWh en UI
+                            "Energia_Dia_kWh": datos_fila[1], # Se mantiene el nombre interno pero se etiqueta como kWh en UI
                             "Inc_Dia_Porc": datos_fila[2],
                             "Energia_Mes_kWh": datos_fila[3],
                             "Inc_Mes_Porc": datos_fila[4],
@@ -234,23 +234,23 @@ balance_df["Balance"] = balance_df["Oferta"] - balance_df["Demanda"]
 # -----------------------------------------------------------------------------
 # KPIs
 # -----------------------------------------------------------------------------
-st.header("Estado del Sistema (MWh)")
+st.header("Estado del Sistema (kWh)")
 
 if not balance_df.empty:
     latest = balance_df.iloc[-1]
 
     col1, col2, col3, col4 = st.columns(4)
 
-    # Se añade la unidad oficial MWh según reportes de CENACE
-    col1.metric("Generación (MWh)", f"{latest['Total Generación']:,.0f}")
-    col2.metric("Importación (MWh)", f"{latest['Total Importación']:,.0f}")
-    col3.metric("Demanda (MWh)", f"{latest['Demanda']:,.0f}")
+    # Se cambia la unidad a kWh según solicitud
+    col1.metric("Generación (kWh)", f"{latest['Total Generación']:,.0f}")
+    col2.metric("Importación (kWh)", f"{latest['Total Importación']:,.0f}")
+    col3.metric("Demanda (kWh)", f"{latest['Demanda']:,.0f}")
 
     balance_val = latest["Balance"]
     color = "normal" if balance_val >= 0 else "inverse"
 
     col4.metric(
-        "Balance (MWh)",
+        "Balance (kWh)",
         f"{balance_val:,.0f}",
         delta="Superávit" if balance_val >= 0 else "Déficit",
         delta_color=color
@@ -272,18 +272,18 @@ if not balance_df.empty:
     - **Oferta vs Demanda:** El cruce de estas líneas es crítico. Si la Demanda supera la Oferta, el sistema entra en déficit, lo que suele requerir cortes de carga o importaciones de emergencia para mantener la estabilidad de la frecuencia.
     """)
 
-st.header("Pérdidas del sistema (MWh)")
+st.header("Pérdidas del sistema (kWh)")
 if not balance_df.empty:
     st.line_chart(balance_df, x="Fecha", y="Total Pérdidas Transporte")
 
-st.header("Balance detallado (Unidades en Megavatios-hora - MWh)")
+st.header("Balance detallado (Unidades en Kilovatios-hora - kWh)")
 
 # Renombrar columnas para la tabla final para evitar confusiones
 tabla_final = balance_df.copy()
 tabla_final.columns = [
-    "Fecha", "Generación (MWh)", "Importación (MWh)", "Exportación (MWh)", 
-    "Demanda (MWh)", "Pérdidas Transp. (MWh)", "Oferta Total (MWh)", 
-    "Consumo Total (MWh)", "Balance/Superávit (MWh)"
+    "Fecha", "Generación (kWh)", "Importación (kWh)", "Exportación (kWh)", 
+    "Demanda (kWh)", "Pérdidas Transp. (kWh)", "Oferta Total (kWh)", 
+    "Consumo Total (kWh)", "Balance/Superávit (kWh)"
 ]
 
 st.dataframe(tabla_final, use_container_width=True)

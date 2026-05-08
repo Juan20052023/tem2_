@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import io
 import re
-import pydeck as pdk # <-- NUEVA IMPORTACIÓN PARA EL MAPA INTERACTIVO
+import pydeck as pdk 
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA
@@ -29,7 +29,7 @@ DATA_FILENAME = Path(__file__).parent / "reporte_simec_historico_dinamico.csv"
 # FUNCIONES DE SCRAPING (Con lógica incremental)
 # -----------------------------------------------------------------------------
 def extraer_datos_rango(fecha_inicio, fecha_fin):
-    """Extrae datos del CENACE para un rango de fechas específico usando tu lógica original."""
+    """Extrae datos del CENACE para un rango de fechas específico."""
     datos_totales = []
     fecha_actual = fecha_inicio
 
@@ -55,7 +55,7 @@ def extraer_datos_rango(fecha_inicio, fecha_fin):
                         registro = {
                             "Fecha": fecha_texto,
                             "Concepto": datos_fila[0],
-                            "Energia_Dia_kWh": datos_fila[1], # Se mantiene el nombre interno pero se etiqueta como kWh en UI
+                            "Energia_Dia_kWh": datos_fila[1],
                             "Inc_Dia_Porc": datos_fila[2],
                             "Energia_Mes_kWh": datos_fila[3],
                             "Inc_Mes_Porc": datos_fila[4],
@@ -68,7 +68,7 @@ def extraer_datos_rango(fecha_inicio, fecha_fin):
         except Exception as e:
             print(f"Error en {fecha_texto}: {e}")
 
-        time.sleep(0.5) # Delay para no saturar
+        time.sleep(0.5) 
         fecha_actual += timedelta(days=1)
 
     return datos_totales
@@ -109,11 +109,9 @@ def actualizar_archivo_csv():
 @st.cache_data(ttl=86400)
 def load_data():
     actualizar_archivo_csv()
-    # Usamos try/except por si el archivo aún no existe en la primera ejecución
     try:
         df = pd.read_csv(DATA_FILENAME, encoding='utf-8', engine='python')
     except FileNotFoundError:
-        # Retornamos un dataframe vacío con la estructura si falla
         return pd.DataFrame(columns=["Fecha", "Concepto", "Energia_Dia_kWh", "Inc_Dia_Porc", "Energia_Mes_kWh", "Inc_Mes_Porc", "Energia_Año_kWh", "Inc_Año_Porc", "Ultimos_365_Dias_kWh"]), "Fecha"
 
     df.columns = df.columns.str.strip()
@@ -153,7 +151,6 @@ def load_data():
 # UTILIDADES PARA MAPAS
 # -----------------------------------------------------------------------------
 def convertir_coordenadas(coord_str):
-    """Convierte coordenadas de Grados Minutos Segundos (DMS) a Decimales para el mapa."""
     coord_str = str(coord_str).strip()
     partes = re.findall(r"[\d.]+", coord_str)
     if len(partes) >= 3:
@@ -161,7 +158,6 @@ def convertir_coordenadas(coord_str):
         minutos = float(partes[1])
         segundos = float(partes[2])
         decimal = grados + (minutos / 60.0) + (segundos / 3600.0)
-        # Si es Sur (S) u Oeste (O/W), la coordenada es negativa
         if 'S' in coord_str.upper() or 'O' in coord_str.upper() or 'W' in coord_str.upper():
             decimal = -decimal
         return decimal
@@ -197,7 +193,6 @@ else:
 
 st.sidebar.markdown("---")
 
-# --- CARGA Y PROCESAMIENTO DE DATOS DE CENTRALES ---
 csv_centrales = """Central Hidroeléctrica,Ubicación (Ciudad/Prov),Latitud,Longitud,Oferta (MW),Aporte Nacional
 Coca Codo Sinclair,"El Chaco, Napo","0° 28' 37.2"" S","77° 59' 24.0"" O",1500,33.11%
 Paute Molino,"Sevilla de Oro, Azuay","2° 46' 8.4"" S","78° 45' 28.8"" O",1100,24.28%
@@ -228,47 +223,32 @@ Pasachoa,"Mejía, Pichincha","0° 23' 15.0"" S","78° 28' 10.0"" O",4.5,0.10%
 Illuchi N. 1,"Latacunga, Cotopaxi","0° 54' 20.0"" S","78° 35' 40.0"" O",4.2,0.09%"""
 
 df_centrales = pd.read_csv(io.StringIO(csv_centrales))
-
-# Crear columnas decimales para el mapa
 df_centrales['latitude'] = df_centrales['Latitud'].apply(convertir_coordenadas)
 df_centrales['longitude'] = df_centrales['Longitud'].apply(convertir_coordenadas)
 
-# --- MAPA INTERACTIVO CON PYDECK ---
 st.sidebar.subheader("Mapa de Centrales Hidroeléctricas Potencia Nominal")
-
-# Definir la capa de puntos
 layer = pdk.Layer(
     "ScatterplotLayer",
     data=df_centrales,
     get_position=["longitude", "latitude"],
-    get_radius=12000, # Ajusta el tamaño de los círculos si los quieres más grandes/chicos
-    get_fill_color=[255, 0, 0, 200], # Color rojo con un poco de transparencia
-    pickable=True, # Habilita la interacción del mouse
+    get_radius=12000,
+    get_fill_color=[255, 0, 0, 200],
+    pickable=True,
 )
-
-# Definir la vista inicial del mapa
 view_state = pdk.ViewState(
     latitude=df_centrales['latitude'].mean(),
     longitude=df_centrales['longitude'].mean(),
     zoom=5.5,
     pitch=0,
 )
-
-# Crear el mapa configurando el tooltip
 mapa_deck = pdk.Deck(
     layers=[layer],
     initial_view_state=view_state,
     tooltip={"text": "{Central Hidroeléctrica}\nOferta: {Oferta (MW)} MW"}
 )
-
-# Mostrar el mapa en el sidebar
 st.sidebar.pydeck_chart(mapa_deck)
-
 st.sidebar.markdown("---")
-
-# --- TABLA DE DATOS ACTUALIZADA ---
 st.sidebar.subheader("Información de Centrales Hidroeléctricas")
-# Quitamos las columnas auxiliares de lat/lon decimales para que la tabla luzca limpia
 st.sidebar.dataframe(df_centrales.drop(columns=['latitude', 'longitude']), hide_index=True)
 
 # -----------------------------------------------------------------------------
@@ -297,7 +277,6 @@ if not df.empty:
                     .merge(perd, on="Fecha", how="left")
 
     balance_df = balance_df.fillna(0)
-
     balance_df["Oferta"] = balance_df["Total Generación"] + balance_df["Total Importación"]
     balance_df["Demanda"] = balance_df["Demanda Distribución"]
     balance_df["Balance"] = balance_df["Oferta"] - balance_df["Demanda"]
@@ -306,47 +285,24 @@ if not df.empty:
     # KPIs
     # -----------------------------------------------------------------------------
     st.header("Estado del Sistema (kWh)")
-
     if not balance_df.empty:
         latest = balance_df.iloc[-1]
-
         col1, col2, col3, col4 = st.columns(4)
-
         col1.metric("Generación (kWh)", f"{latest['Total Generación']:,.0f}")
         col2.metric("Importación (kWh)", f"{latest['Total Importación']:,.0f}")
         col3.metric("Demanda (kWh)", f"{latest['Demanda']:,.0f}")
-
         balance_val = latest["Balance"]
         color = "normal" if balance_val >= 0 else "inverse"
-
-        col4.metric(
-            "Balance (kWh)",
-            f"{balance_val:,.0f}",
-            delta="Superávit" if balance_val >= 0 else "Déficit",
-            delta_color=color
-        )
-    else:
-        st.warning("No hay datos suficientes para calcular los KPIs en el rango seleccionado.")
-
+        col4.metric("Balance (kWh)", f"{balance_val:,.0f}", delta="Superávit" if balance_val >= 0 else "Déficit", delta_color=color)
+    
     # -----------------------------------------------------------------------------
-    # GRÁFICOS Y TABLA
+    # GRÁFICOS Y TABLA DIARIA
     # -----------------------------------------------------------------------------
     st.header("Oferta vs Demanda")
     if not balance_df.empty:
         st.line_chart(balance_df, x="Fecha", y=["Oferta", "Demanda"])
         
-        st.markdown("""
-        ****
-        - **Superávit:** Ocurre cuando la línea de **Oferta** (Generación + Importación) está por encima de la línea de **Demanda**. Esto indica que el sistema tiene energía suficiente para cubrir el consumo e incluso exportar o ahorrar agua en embalses.
-        - **Oferta vs Demanda:** El cruce de estas líneas es crítico. Si la Demanda supera la Oferta, el sistema entra en déficit, lo que suele requerir cortes de carga o importaciones de emergencia para mantener la estabilidad de la frecuencia.
-        """)
-
-    st.header("Pérdidas del sistema (kWh)")
-    if not balance_df.empty:
-        st.line_chart(balance_df, x="Fecha", y="Total Pérdidas Transporte")
-
-    st.header("Balance detallado (Unidades en Kilovatios-hora - kWh)")
-
+    st.header("Balance detallado Diario (Unidades en Kilovatios-hora - kWh)")
     if not balance_df.empty:
         tabla_final = balance_df.copy()
         tabla_final.columns = [
@@ -354,5 +310,68 @@ if not df.empty:
             "Demanda (kWh)", "Pérdidas Transp. (kWh)", "Oferta Total (kWh)", 
             "Consumo Total (kWh)", "Balance/Superávit (kWh)"
         ]
-
         st.dataframe(tabla_final, use_container_width=True)
+
+    # -----------------------------------------------------------------------------
+    # NUEVA SECCIÓN: PROMEDIO POR MES (Solicitado)
+    # -----------------------------------------------------------------------------
+    st.header("Resumen de Promedios Mensuales (kWh)")
+    
+    if not balance_df.empty:
+        df_mensual_prom = balance_df.copy()
+        
+        # FORZAMOS el formato datetime para evitar el error Attribute Error dt
+        df_mensual_prom['Fecha'] = pd.to_datetime(df_mensual_prom['Fecha'])
+        
+        # Creamos la columna Mes (Año-Mes) para agrupar correctamente
+        df_mensual_prom['Mes_Key'] = df_mensual_prom['Fecha'].dt.to_period('M')
+        
+        # Definimos las columnas a promediar
+        cols_promedio = [
+            "Total Generación", "Total Importación", "Total Exportación", 
+            "Demanda Distribución", "Total Pérdidas Transporte", 
+            "Oferta", "Demanda", "Balance"
+        ]
+        
+        # Agrupamos por mes y calculamos el promedio
+        resumen_promedio = df_mensual_prom.groupby('Mes_Key')[cols_promedio].mean().reset_index()
+        
+        # Convertimos la llave del mes a string para mostrarla bonito
+        resumen_promedio['Mes'] = resumen_promedio['Mes_Key'].astype(str)
+        
+        # Seleccionamos y renombramos para la UI
+        tabla_prom_ui = resumen_promedio[[
+            "Mes", "Total Generación", "Total Importación", "Total Exportación", 
+            "Demanda Distribución", "Total Pérdidas Transporte", "Oferta", "Demanda", "Balance"
+        ]]
+        
+        tabla_prom_ui.columns = [
+            "Mes", "Prom. Generación", "Prom. Importación", "Prom. Exportación", 
+            "Prom. Demanda", "Prom. Pérdidas", "Prom. Oferta Total", 
+            "Prom. Consumo", "Prom. Balance"
+        ]
+        
+        # Mostramos la tabla de promedios
+        st.info("La siguiente tabla muestra el promedio diario registrado en cada mes para cada concepto.")
+        st.dataframe(tabla_prom_ui.style.format(precision=2), use_container_width=True)
+        
+        # Gráfica de promedios para visualizar tendencias mensuales
+        st.subheader("Tendencia de Promedios Mensuales")
+        st.line_chart(tabla_prom_ui, x="Mes", y=["Prom. Generación", "Prom. Demanda"])
+
+    # -----------------------------------------------------------------------------
+    # SECCIÓN ADICIONAL: TOTALES POR MES (Existente)
+    # -----------------------------------------------------------------------------
+    st.header("Balance Acumulado (Suma) por Mes")
+    
+    if not balance_df.empty:
+        df_mensual_sum = balance_df.copy()
+        
+        # FORZAMOS el formato datetime para evitar el error Attribute Error dt
+        df_mensual_sum['Fecha'] = pd.to_datetime(df_mensual_sum['Fecha'])
+        df_mensual_sum['Mes'] = df_mensual_sum['Fecha'].dt.strftime('%Y-%m')
+        
+        columnas_a_sumar = ["Total Generación", "Total Importación", "Total Exportación", "Demanda Distribución", "Total Pérdidas Transporte", "Oferta", "Demanda", "Balance"]
+        
+        df_agrupado_mes = df_mensual_sum.groupby('Mes')[columnas_a_sumar].sum().reset_index()
+        st.dataframe(df_agrupado_mes, use_container_width=True)

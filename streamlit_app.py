@@ -178,14 +178,26 @@ st.title("Dashboard Operación del Sistema Eléctrico, Acumulado")
 st.sidebar.header("Filtros")
 
 if not df.empty:
-    min_date = df[TIME_COLUMN].min()
-    max_date = df[TIME_COLUMN].max()
+    min_date_val = df[TIME_COLUMN].min().date()
+    max_date_val = df[TIME_COLUMN].max().date()
 
-    date_range = st.sidebar.slider(
-        "Rango de fechas",
-        min_value=min_date,
-        max_value=max_date,
-        value=(min_date, max_date)
+    # Opción para digitar fechas manualmente en adicional a la barra
+    col1, col2 = st.sidebar.columns(2)
+    fecha_inicio_manual = col1.date_input("Fecha Inicio", min_date_val, min_value=min_date_val, max_value=max_date_val)
+    fecha_fin_manual = col2.date_input("Fecha Fin", max_date_val, min_value=min_date_val, max_value=max_date_val)
+
+    # Barra interactiva (slider) vinculada a los inputs
+    rango_seleccionado = st.sidebar.slider(
+        "Desliza o usa los recuadros arriba:",
+        min_value=min_date_val,
+        max_value=max_date_val,
+        value=(fecha_inicio_manual, fecha_fin_manual)
+    )
+
+    # Reconvertir al formato datetime que usa el resto del código
+    date_range = (
+        datetime.combine(rango_seleccionado[0], datetime.min.time()),
+        datetime.combine(rango_seleccionado[1], datetime.max.time())
     )
 else:
     date_range = (datetime.now(), datetime.now())
